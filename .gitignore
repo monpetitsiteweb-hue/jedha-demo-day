@@ -1,0 +1,22 @@
+# Data — the gold mine, never online
+data/
+*.csv
+*.parquet
+*.pkl
+*.keras
+*.h5
+*.onnx
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# Cache
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
