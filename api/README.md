@@ -97,7 +97,7 @@ python main.py                # serves on http://0.0.0.0:8000
 
 ---
 
-## Security & limitations (stated honestly)
+## Security & limitations
 
 - **The `/predict` endpoint is public and unauthenticated.** It is the single buy-decision authority on the live path, so this is a real limitation — **adding an API key** (or network-level restriction) is a planned improvement.
 - **Secrets are never hard-coded.** `SUPABASE_URL` / `SUPABASE_KEY` are read from environment variables; `.env` is git-ignored and `.env.example` ships only placeholder values.
