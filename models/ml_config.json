@@ -1,0 +1,35 @@
+{
+  "xgb_threshold": 0.94,
+  "rf_threshold": 0.94,
+  "top_features": [
+    "sell_pressure",
+    "buy_pressure",
+    "upper_wick_ratio",
+    "lower_wick_ratio",
+    "atr_pct",
+    "ret_288",
+    "stoch_k",
+    "ema200_slope_48",
+    "is_weekend",
+    "ema200_slope_12"
+  ],
+  "feature_cols": [
+    "sell_pressure",
+    "upper_wick_ratio",
+    "buy_pressure",
+    "lower_wick_ratio",
+    "atr_pct",
+    "ret_288",
+    "ema200_slope_48",
+    "stoch_k",
+    "is_weekend",
+    "ema200_slope_12"
+  ],
+  "best_model": "XGBoost",
+  "lstm_threshold": 0.97,
+  "ensemble_threshold": 0.97,
+  "auc_xgb": 0.8659,
+  "auc_lstm": 0.855,
+  "auc_ensemble": 0.8974,
+  "winner_model": "Ensemble"
+}

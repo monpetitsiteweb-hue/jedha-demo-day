@@ -20,3 +20,11 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 Thumbs.db
+
+# but DO publish the production models
+!models/*.pkl
+!models/*.keras
+!models/*.json
+
+# but keep the example env (no secrets)
+!api/.env.example

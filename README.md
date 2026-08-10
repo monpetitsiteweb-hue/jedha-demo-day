@@ -6,7 +6,7 @@ An ML layer that sits on top of a live, rule-based crypto trading engine and dec
 
 **Interactive dashboard (Streamlit):** https://jedha.carlos-isturiz.fr
 
-> ⚠️ The raw datasets and trained models are **not** included in this repository (they are proprietary and are the core value of the running system). The notebooks show the full pipeline and results; they are meant to be read, not re-run as-is.
+> The trained **models** are included in [`models/`](models/) and the inference **API** in [`api/`](api/). The large raw datasets are not committed (size), but the notebooks show how they are built. Notebooks are meant to be read, not re-run as-is.
 
 ---
 
@@ -18,7 +18,7 @@ On its own, the engine is **right less than half the time**: its signal win rate
 
 ## The solution
 
-A supervised model scores every candidate buy from 0 to 100% (its probability of winning). The engine only executes a buy when that probability clears a confidence bar (**0.94**). Selling stays 100% rule-based (take-profit, stop-loss, trailing stop) — the AI lifts the *win rate*, the classic rules protect the *amounts*.
+A supervised model scores every candidate buy from 0 to 100% (its probability of winning). The engine only executes a buy when that probability clears a confidence bar (**0.97**). Selling stays 100% rule-based (take-profit, stop-loss, trailing stop) — the AI lifts the *win rate*, the classic rules protect the *amounts*.
 
 ```
 SIGNALS ──▶ ENGINE ──▶ [ AI LAYER: "is this really a good moment?" ] ──▶ DECISION
@@ -32,10 +32,10 @@ The AI **confirms or vetoes** — it never creates a trade on its own.
 The running engine continuously logs everything it does to a database (Supabase). That **operational logbook** is what powers live monitoring — it is built for *watching the system run*, not for training a model. So, by design, I keep two separate data worlds: the operational logbook on one side, and a dedicated **training dataset built from the raw 5-minute price history** on the other. A model needs clean, consistent, leak-free labels over the whole period, which is exactly what a purpose-built dataset guarantees. It is assembled in three steps:
 
 1. **Collect & clean** — one tidy row per 5-minute moment, per crypto.
-2. **Enrich** — 78 indicators describing the recent past (trend, momentum, volatility, oversold-ness…). 77 are computed from prices; 1 is the external fear & greed index.
+2. **Enrich** — **10** indicators describing the recent past (trend, momentum, volatility, oversold-ness…), kept from an initial 78 by ablation (see below).
 3. **Label** — a 0/1 answer via the **triple-barrier method**: pretend to buy, watch the next hour (12 candles); hit **+0.95%** first = win (1), hit **−0.5%** first (or nothing happens) = loss (0).
 
-Result: **500k+ labeled moments**, split into a training set and a later, unseen test set (~213k rows) — no future information leaks into any feature.
+Result: **500k+ labeled moments**, split **by time** (~80% train / ~20% test): the model learns on the past and is judged only on later months it never saw. A temporal split, not random — otherwise near-identical neighbouring candles would let it "see the future".
 
 ## Exploratory findings
 
@@ -43,55 +43,73 @@ The strongest, most stable pattern is **mean reversion**: win rate is highest ri
 
 ## Models & results
 
-Trained and compared on the out-of-sample test set: **Logistic Regression → Random Forest → XGBoost → LSTM**, plus an ensemble.
+Trained and compared on the **out-of-sample test set**: **Logistic Regression → Random Forest → XGBoost → LSTM**, plus their ensemble.
 
-| Model | Quality score (0.5 = random, 1 = perfect) |
+| Model | AUC (test) |
 |---|---|
-| Logistic Regression | 0.70 |
-| Random Forest | **0.88** |
-| XGBoost | 0.86 |
-| LSTM | 0.85 |
+| Logistic Regression | 0.767 |
+| Random Forest | **0.870** — best single model |
+| XGBoost | 0.866 |
+| LSTM | 0.855 |
+| **Ensemble (XGBoost + LSTM)** | **0.897** |
 
-Because only ~10% of moments are winners, a lazy model that simply predicts "loss" **every single time** is right **90% of the time** — a 90% accuracy that is completely useless, since it never catches a single winner (its F1-score is 0). This is why the models are judged on **F1 and AUC**, which reward actually finding the rare winners, rather than on raw accuracy.
+Because only ~10% of moments are winners, a lazy model that predicts "loss" every time is right 90% of the time — a useless 90% accuracy (F1 = 0). Models are therefore judged on **F1 and AUC**, not raw accuracy. Random Forest is the best *single* model, but the **XGBoost + LSTM ensemble** does better (0.897) and is what runs in production. A **data-leakage check** confirms the model doesn't cheat: removing the current-candle features drops AUC only from 0.86 to 0.82.
 
-**The confidence filter is the core idea.** The model gives every candidate buy a score from 0 to 100% — how confident it is that the trade will win. We then set a **bar** and act only on buys that score above it. The higher the bar, the more selective we are: the win rate goes up, but fewer trades qualify. At our **0.94** bar (the model must be at least 94% sure):
+### Fewer features, same power (ablation)
 
-| | Win rate | Trades (test) | Net / trade (after ~0.18% costs) |
+The model was **cut from 78 features down to 10** with virtually no loss of quality (AUC 0.866 vs 0.872). The reason is a production constraint: the live service only receives 5-minute candles, so features that needed outside data (higher-timeframe history, a fear & greed index) can't be reproduced in real time. The 10 kept features are **100% pure-5m** — so training and production see exactly the same inputs, with no train/serving skew.
+
+### Does it work?
+
+Three win rates that **must not be stacked** (different targets and definitions): **~10%** buying blindly · **45.7%** the engine's signal · **72%** the AI filter — the ensemble at its **0.97** confidence bar. The confidence filter is the mechanism: the higher the bar, the higher the win rate and the fewer the trades (from **46%** at 0.80 to **81%** at 0.98). Measured on the **full test period** — the 72% holds because the ensemble stays *selective* when the market turns (it trades less, not badly).
+
+### What it could earn — and on how little capital
+
+On the test set, **€500 per trade**, net of ~0.18% costs (target Aerodrome routing):
+
+| Model | Win rate | Trades | Net P&L |
 |---|---|---|---|
-| **XGBoost** | 52% | 25,851 | +0.18% |
-| **Random Forest** | 75% | 11,135 | +0.39% |
+| XGBoost | 49% | 27,477 | +€30,100 |
+| Random Forest | 43% | 29,516 | +€21,300 |
+| LSTM | 42% | 23,957 | +€14,400 |
+| **Ensemble** | **72%** | **14,514** | **+€33,600** |
 
-Three win rates that **must not be stacked** (they use different targets and definitions): **~10%** buying blindly · **45.7%** the engine's signal · **52–75%** the AI filter.
+Every model is profitable, but the **ensemble earns the most with far fewer trades** (edge per trade ~0.46%, about double any single model — it only acts when XGBoost and the LSTM agree). And it runs on **modest capital**: trades are short (~17 min), so rarely more than ~1 runs at once (6-month peak: 19). So **~€9,500 covers every trade**, and €4,500 still captures 98% of them (a +747% return on that capital), at ~81 trades/day. A backtest projection under the target low-cost routing — promising, not a guarantee.
 
 ## Honest caveats
 
-- **The model looks better in cross-validation than it really is.** In cross-validation the score is very high (~0.997), but on a genuinely unseen later period it drops to ~0.87. The gap comes from consecutive 5-minute candles being almost identical, which lets a little information "leak" between neighbouring slices. The number to trust is the one measured on the later, out-of-sample **test** period (~0.87) — which is still strong.
+- **The model looks better in cross-validation than it really is.** In cross-validation the score is very high (~0.996), but on a genuinely unseen later period the ensemble scores **~0.90** (0.897). The gap comes from consecutive 5-minute candles being almost identical, which lets a little information "leak" between neighbouring slices without an embargo. The number to trust is the one measured on the later, out-of-sample **test** period (0.897) — still strong.
 - **The backtest simplifies reality in three ways.** (1) The model is trained assuming a trade closes within about an hour, whereas the live engine actually holds a position ~7h on average (it lets winners run with a trailing stop). (2) The training target (+0.95% / −0.5%) is slightly different from the engine's live settings (+0.8% / −0.4%). (3) The raw returns are before costs; the ~0.18% on-chain cost per trade is subtracted afterwards, at evaluation. None of these break the results — but they mean the backtest is a solid **estimate**, not a guarantee.
 - Results are measured on **past data** — promising, not proven. Real validation requires small-stake live trading.
 
 ## Deployment
 
-**How the model is served and called.** The trained model is wrapped in a small **FastAPI** web service and deployed on **Railway**, exposing a single prediction endpoint. Every 5 minutes, when the engine is about to buy, it sends the 78 features of the current moment to that endpoint over an authenticated HTTPS request (the engine holds a secret API key that the service checks, so no one else can call it). The service loads the model once at start-up, runs the prediction, and returns the win probability in a few milliseconds. The engine then executes the buy only if that probability clears the 0.94 bar — and, crucially, **falls back to its own rule-based decision if the ML service is unreachable**, so a model outage never stops trading.
+**How the model is served and called.** The model runs as a small **FastAPI** service on **Railway**, exposing a `/predict` endpoint. Every 5 minutes, when the engine is about to buy, it sends the service the **last 400 raw 5-minute candles** (OHLCV). The service itself rebuilds the technical indicators, runs an **ensemble of XGBoost + LSTM** (50/50), and returns the **win probability** in a few milliseconds. The engine compares that probability to its confidence bar and buys above it — and, crucially, **falls back to its own rule-based decision if the service is unreachable** (5-second timeout), so a model outage never stops trading. The models themselves live in a Supabase Storage bucket and are downloaded by the service at start-up.
 
 ```
         every 5 min, on a candidate buy
-ENGINE ───────── 78 features (HTTPS + API key) ─────────▶ FastAPI model service (Railway)
-   ▲                                                              │
+ENGINE ───────── 400 raw 5-min candles ─────────▶ FastAPI service (Railway)
+   ▲                                                 builds features
+   │                                                 XGBoost + LSTM ensemble
    └───────────────── win probability (0–1) ◀────────────────────┘
    │
-   └─▶ buy only if probability ≥ 0.94   (else fall back to rules)
+   └─▶ buy if probability ≥ confidence bar   (else fall back to rules)
 ```
 
+**Known limitation (stated honestly):** the `/predict` endpoint is currently a **public URL with no authentication** — it is the single decision authority on the live path, so adding an API key (or network-level restriction) is a planned security improvement.
+
 **The two pieces:**
-- **ML service** — the model, wrapped in FastAPI, deployed on **Railway**; called by the engine on every candidate buy.
+- **ML service** — the ensemble, wrapped in FastAPI, deployed on **Railway**; called by the engine on every candidate buy. → [`api/`](api/)
 - **Dashboard** — this project's analytics front-end: **Streamlit** behind **nginx** with HTTPS on a **VPS** → https://jedha.carlos-isturiz.fr
+
+Full step-by-step deployment (Railway service + VPS dashboard) is documented in [`deployment/`](deployment/). The published production models are in [`models/`](models/).
 
 ## Next steps
 
 1. **Make it reliable** — finish the live engine↔AI pipeline in production.
 2. **Prove it for real** — validate carefully with small real money.
 3. **Extend to selling** — today the AI only decides buys.
-4. **Ride the trends** — a prudent simulation suggests that letting winners run (trailing stop) instead of exiting at +0.95% could lift net gain/trade from ~0.2% to **+1.3–2.4%**; the next model should be trained for that longer-horizon exit.
+4. **Ride the trends** — a prudent simulation suggests that letting winners run (trailing stop) instead of exiting at +0.95% could lift the net gain per trade materially; the next model should be trained for that longer-horizon exit.
 
 ## Tech stack
 
@@ -100,21 +118,28 @@ Python · pandas · scikit-learn · XGBoost · TensorFlow/Keras (LSTM) · Stream
 ## Repository structure
 
 ```
+├── api/                      # FastAPI inference service (served on Railway)
+│   ├── main.py
+│   ├── requirements.txt
+│   ├── .env.example
+│   └── README.md
+├── models/                   # published production models (10 features)
+│   ├── xgb_final_*.pkl · rf_final_*.pkl · lstm_final.keras · scaler_lstm.pkl
+│   ├── feature_cols_selected.json · models_latest.json
+│   └── README.md
+├── deployment/
+│   └── README.md             # full deployment: Railway service + VPS dashboard
 ├── app/
 │   └── app_streamlit.py      # the interactive dashboard (technical + simplified views)
-├── notebooks/
-│   ├── 01_feature_engineering.ipynb
-│   ├── 02_eda.ipynb
-│   ├── 03_ml_models.ipynb
-│   ├── 04_backtest.ipynb
-│   └── 05_deep_learning.ipynb
+├── notebooks/                # 01 feature engineering · 02 EDA · 03 ML models
+│   └── ...                   # 04 backtest · 05 deep learning · 06 feature ablation
 ├── requirements.txt
 └── README.md
 ```
 
 ## Data privacy (RGPD)
 
-This project uses **market data only** (crypto prices and derived technical indicators) — **no personal data** is collected or processed, so it falls outside the scope of RGPD personal-data obligations. The raw datasets, trained models and any credentials are deliberately kept out of this repository.
+This project uses **market data only** (crypto prices and derived technical indicators) — **no personal data** is collected or processed, so it falls outside the scope of RGPD personal-data obligations. The trained models are included; only **credentials/secrets** and the large raw datasets are deliberately kept out of this repository.
 
 ---
 

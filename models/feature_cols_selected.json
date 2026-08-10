@@ -1,0 +1,12 @@
+[
+  "sell_pressure",
+  "upper_wick_ratio",
+  "buy_pressure",
+  "lower_wick_ratio",
+  "atr_pct",
+  "ret_288",
+  "ema200_slope_48",
+  "stoch_k",
+  "is_weekend",
+  "ema200_slope_12"
+]
