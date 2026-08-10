@@ -76,7 +76,7 @@ On the test set, **€500 per trade**, net of ~0.18% costs (target Aerodrome rou
 
 Every model is profitable, but the **ensemble earns the most with far fewer trades** (edge per trade ~0.46%, about double any single model — it only acts when XGBoost and the LSTM agree). And it runs on **modest capital**: trades are short (~17 min), so rarely more than ~1 runs at once (6-month peak: 19). So **~€9,500 covers every trade**, and €4,500 still captures 98% of them (a +747% return on that capital), at ~81 trades/day. A backtest projection under the target low-cost routing — promising, not a guarantee.
 
-## Honest caveats
+## Caveats
 
 - **The model looks better in cross-validation than it really is.** In cross-validation the score is very high (~0.996), but on a genuinely unseen later period the ensemble scores **~0.90** (0.897). The gap comes from consecutive 5-minute candles being almost identical, which lets a little information "leak" between neighbouring slices without an embargo. The number to trust is the one measured on the later, out-of-sample **test** period (0.897) — still strong.
 - **The backtest simplifies reality in three ways.** (1) The model is trained assuming a trade closes within about an hour, whereas the live engine actually holds a position ~7h on average (it lets winners run with a trailing stop). (2) The training target (+0.95% / −0.5%) is slightly different from the engine's live settings (+0.8% / −0.4%). (3) The raw returns are before costs; the ~0.18% on-chain cost per trade is subtracted afterwards, at evaluation. None of these break the results — but they mean the backtest is a solid **estimate**, not a guarantee.
