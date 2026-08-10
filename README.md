@@ -117,6 +117,8 @@ Python · pandas · scikit-learn · XGBoost · TensorFlow/Keras (LSTM) · Stream
 
 ## Repository structure
 
+## Repository structure
+
 ```
 ├── api/                      # FastAPI inference service (served on Railway)
 │   ├── main.py
@@ -124,8 +126,8 @@ Python · pandas · scikit-learn · XGBoost · TensorFlow/Keras (LSTM) · Stream
 │   ├── .env.example
 │   └── README.md
 ├── models/                   # published production models (10 features)
-│   ├── xgb_final_*.pkl · rf_final_*.pkl · lstm_final.keras · scaler_lstm.pkl
-│   ├── feature_cols_selected.json · models_latest.json
+│   ├── xgb_final_20260808.pkl · rf_final_20260808.pkl · lstm_final_20260808.keras
+│   ├── scaler_lstm_20260808.pkl · feature_cols_selected.json · models_latest.json · ml_config.json
 │   └── README.md
 ├── deployment/
 │   └── README.md             # full deployment: Railway service + VPS dashboard
