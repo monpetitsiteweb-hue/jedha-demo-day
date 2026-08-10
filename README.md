@@ -96,7 +96,7 @@ ENGINE ───────── 400 raw 5-min candles ───────�
    └─▶ buy if probability ≥ confidence bar   (else fall back to rules)
 ```
 
-**Known limitation (stated honestly):** the `/predict` endpoint is currently a **public URL with no authentication** — it is the single decision authority on the live path, so adding an API key (or network-level restriction) is a planned security improvement.
+**Known limitation:** the `/predict` endpoint is currently a **public URL with no authentication** — it is the single decision authority on the live path, so adding an API key (or network-level restriction) is a planned security improvement.
 
 **The two pieces:**
 - **ML service** — the ensemble, wrapped in FastAPI, deployed on **Railway**; called by the engine on every candidate buy. → [`api/`](api/)
