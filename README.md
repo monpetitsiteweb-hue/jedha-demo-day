@@ -6,6 +6,8 @@ An ML layer that sits on top of a live, rule-based crypto trading engine and dec
 
 **Interactive dashboard (Streamlit):** https://jedha.carlos-isturiz.fr
 
+**Slides of the oral presentation:** [ai-for-trading-slides.html](ai-for-trading-slides.html) (open in a browser).
+
 > The trained **models** are included in [`models/`](models/) and the inference **API** in [`api/`](api/). The large raw datasets are not committed (size), but the notebooks show how they are built. Notebooks are meant to be read, not re-run as-is.
 
 ---
@@ -114,8 +116,6 @@ Full step-by-step deployment (Railway service + VPS dashboard) is documented in 
 ## Tech stack
 
 Python · pandas · scikit-learn · XGBoost · TensorFlow/Keras (LSTM) · Streamlit · FastAPI · Railway · nginx · Supabase
-
-## Repository structure
 
 ## Repository structure
 
